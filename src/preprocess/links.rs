@@ -134,7 +134,7 @@ where
 enum LinkType<'a> {
     Escaped,
     Include(PathBuf, RangeOrAnchor),
-    Playground(PathBuf, Vec<&'a str>),
+    Playground(PathBuf, &'a str, Vec<&'a str>),
     RustdocInclude(PathBuf, RangeOrAnchor),
     Title(&'a str),
 }
@@ -204,7 +204,7 @@ impl<'a> LinkType<'a> {
         match self {
             LinkType::Escaped => None,
             LinkType::Include(p, _) => Some(return_relative_path(base, &p)),
-            LinkType::Playground(p, _) => Some(return_relative_path(base, &p)),
+            LinkType::Playground(p, _, _) => Some(return_relative_path(base, &p)),
             LinkType::RustdocInclude(p, _) => Some(return_relative_path(base, &p)),
             LinkType::Title(_) => None,
         }
@@ -283,18 +283,21 @@ impl<'a> Link<'a> {
             (_, Some(typ), Some(rest)) => {
                 let mut path_props = rest.as_str().split_whitespace();
                 let file_arg = path_props.next();
-                let props: Vec<&str> = path_props.collect();
+                let lang = path_props.next().unwrap_or("rust");
+                let props = path_props.collect();
 
                 match (typ.as_str(), file_arg) {
                     ("include", Some(pth)) => Some(parse_include_path(pth)),
-                    ("playground", Some(pth)) => Some(LinkType::Playground(pth.into(), props)),
+                    ("playground", Some(pth)) => {
+                        Some(LinkType::Playground(pth.into(), lang, props))
+                    }
                     ("playpen", Some(pth)) => {
                         warn!(
                             "the {{{{#playpen}}}} expression has been \
                             renamed to {{{{#playground}}}}, \
                             please update your book to use the new name"
                         );
-                        Some(LinkType::Playground(pth.into(), props))
+                        Some(LinkType::Playground(pth.into(), lang, props))
                     }
                     ("rustdoc_include", Some(pth)) => Some(parse_rustdoc_include_path(pth)),
                     _ => None,
@@ -361,7 +364,7 @@ impl<'a> Link<'a> {
                         )
                     })
             }
-            LinkType::Playground(ref pat, ref attrs) => {
+            LinkType::Playground(ref pat, ref ftype, ref attrs) => {
                 let target = base.join(pat);
 
                 let mut contents = fs::read_to_string(&target).with_context(|| {
@@ -371,12 +374,11 @@ impl<'a> Link<'a> {
                         target.display()
                     )
                 })?;
-                let ftype = if !attrs.is_empty() { "rust," } else { "rust" };
                 if !contents.ends_with('\n') {
                     contents.push('\n');
                 }
                 Ok(format!(
-                    "```{}{}\n{}```\n",
+                    "```{} {}\n{}```\n",
                     ftype,
                     attrs.join(","),
                     contents
@@ -497,13 +499,13 @@ mod tests {
                 Link {
                     start_index: 22,
                     end_index: 45,
-                    link_type: LinkType::Playground(PathBuf::from("file.rs"), vec![]),
+                    link_type: LinkType::Playground(PathBuf::from("file.rs"), "rust", vec![]),
                     link_text: "{{#playground file.rs}}",
                 },
                 Link {
                     start_index: 50,
                     end_index: 74,
-                    link_type: LinkType::Playground(PathBuf::from("test.rs"), vec![]),
+                    link_type: LinkType::Playground(PathBuf::from("test.rs"), "rust", vec![]),
                     link_text: "{{#playground test.rs }}",
                 },
             ]
@@ -522,7 +524,11 @@ mod tests {
             vec![Link {
                 start_index: 22,
                 end_index: 57,
-                link_type: LinkType::Playground(PathBuf::from("foo-bar\\baz/_c++.rs"), vec![]),
+                link_type: LinkType::Playground(207
+                    PathBuf::from("foo-bar\\baz/_c++.rs"),
+                    "rust",
+                    vec![]
+                ),
                 link_text: "{{#playground foo-bar\\baz/_c++.rs}}",
             },]
         );
@@ -693,7 +699,11 @@ mod tests {
                 Link {
                     start_index: 41,
                     end_index: 74,
-                    link_type: LinkType::Playground(PathBuf::from("file.rs"), vec!["editable"]),
+                    link_type: LinkType::Playground(
+                        PathBuf::from("file.rs"),
+                        "rust",
+                        vec!["editable"]
+                    ),
                     link_text: "{{#playground file.rs editable }}",
                 },
                 Link {
@@ -701,6 +711,7 @@ mod tests {
                     end_index: 145,
                     link_type: LinkType::Playground(
                         PathBuf::from("my.rs"),
+                        "rust",
                         vec!["editable", "no_run", "should_panic"],
                     ),
                     link_text: "{{#playground my.rs editable no_run should_panic}}",

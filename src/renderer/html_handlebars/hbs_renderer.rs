@@ -877,6 +877,16 @@ fn add_playground_pre(
                 } else {
                     format!("<code class=\"{}\">{}</code>", classes, hide_lines(code))
                 }
+            } else if classes.contains("language-js") {
+                // wrap the contents in an external pre block
+                format!(
+                    "<pre class=\"playground\"><code class=\"{}\">{}</code></pre>",
+                    classes,
+                    {
+                        let content: Cow<'_, str> = code.into();
+                        hide_lines(&content)
+                    }
+                )
             } else {
                 // not language-rust, so no-op
                 text.to_owned()
@@ -1086,6 +1096,24 @@ mod tests {
                     ..Playground::default()
                 },
                 Some(RustEdition::E2021),
+            );
+            assert_eq!(&*got, *should_be);
+        }
+    }
+    #[test]
+    fn add_playground_js() {
+        let inputs = [
+            ("<code class=\"language-js\">console.log('Hello')</code>",
+             "<pre class=\"playground\"><code class=\"language-js\">\n<span class=\"boring\"></span><span class=\"boring\">console.log('Hello')\n</span></code></pre>"),
+        ];
+        for (src, should_be) in &inputs {
+            let got = add_playground_pre(
+                src,
+                &Playground {
+                    editable: true,
+                    ..Playground::default()
+                },
+                None,
             );
             assert_eq!(&*got, *should_be);
         }
